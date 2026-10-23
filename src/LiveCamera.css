@@ -1,0 +1,185 @@
+
+/* BUTONG RIVER - LIVE CAMERA */
+
+.live-camera-card {
+  width: 100%;
+  max-width: 920px;
+  margin: 24px auto;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgba(15, 42, 72, 0.12);
+  border: 1px solid #dce6ef;
+  font-family: inherit;
+}
+
+.live-camera-header {
+  background: #102c4b;
+  color: white;
+  padding: 22px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.live-camera-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-camera-icon {
+  font-size: 28px;
+}
+
+.live-camera-title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.live-camera-title p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: #aec5d9;
+  letter-spacing: 1px;
+}
+
+.live-camera-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #263f58;
+  color: #d8e6f1;
+}
+
+.live-camera-badge.live {
+  background: #d83333;
+  color: white;
+}
+
+.live-camera-badge.waiting {
+  background: #ffe9b7;
+  color: #745000;
+}
+
+.live-camera-body {
+  padding: 22px;
+}
+
+.live-camera-screen {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #081827;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.live-camera-screen video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.live-camera-placeholder {
+  text-align: center;
+  color: #c5d8e8;
+  padding: 20px;
+}
+
+.live-camera-placeholder-icon {
+  font-size: 44px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.live-camera-placeholder h3 {
+  font-size: 18px;
+  margin: 0 0 8px;
+  color: #fff;
+}
+
+.live-camera-placeholder p {
+  font-size: 13px;
+  margin: 0;
+  color: #96b0c7;
+}
+
+.live-camera-footer {
+  padding-top: 20px;
+  text-align: center;
+}
+
+.live-camera-status {
+  font-size: 14px;
+  color: #52677a;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.live-camera-button {
+  border: none;
+  border-radius: 9px;
+  padding: 13px 26px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #1677b9;
+  color: #fff;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.live-camera-button:hover {
+  background: #0d5d93;
+  transform: translateY(-1px);
+}
+
+.live-camera-button.stop {
+  background: #c93636;
+}
+
+.live-camera-button.stop:hover {
+  background: #a62323;
+}
+
+.live-camera-button:focus-visible {
+  outline: 3px solid #62b4ef;
+  outline-offset: 3px;
+}
+
+.live-camera-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: #7a8b99;
+}
+
+@media (max-width: 600px) {
+  .live-camera-header {
+    padding: 16px;
+  }
+
+  .live-camera-title h2 {
+    font-size: 17px;
+  }
+
+  .live-camera-body {
+    padding: 12px;
+  }
+
+  .live-camera-button {
+    width: 100%;
+  }
+}
