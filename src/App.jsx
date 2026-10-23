@@ -7,6 +7,7 @@ import { db, auth } from "./firebase";
 import Login from "./Login";
 import MonitoringGraphs from "./MonitoringGraphs";
 import DataStatus, { getDataHealth } from "./DataStatus";
+import LiveCamera from "./LiveCamera";
 import CameraHistory from "./CameraHistory";
 import "./App.css";
 
@@ -316,6 +317,9 @@ function StatusCards({ data }) {
 
           {/* Historical Monitoring Graphs */}
           <MonitoringGraphs />
+
+          {/*live camera button*/}
+          <LiveCamera />
 
           {/* Camera Monitoring History */}
           <CameraHistory />
