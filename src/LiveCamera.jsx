@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 
 import { auth, db } from "./firebase";
+import "./LiveCamera.css";
 
 import {
   doc,
@@ -11,6 +12,10 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
+
+// ==========================================
+// CONFIGURATION
+// ==========================================
 
 const STREAM_URL =
   "https://rpi-thesis.taila44a15.ts.net/cam/index.m3u8";
@@ -27,6 +32,10 @@ const cameraRef = doc(
   CAMERA_ID
 );
 
+// ==========================================
+// HELPERS
+// ==========================================
+
 function newRequestId() {
   return crypto.randomUUID();
 }
@@ -37,13 +46,14 @@ function newExpiry() {
   );
 }
 
-// Release only the reservation that
-// belongs to this browser request.
+// Release only a reservation owned by
+// this specific browser request.
 async function releaseReservation(id, uid) {
   if (!id || !uid) return;
 
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(cameraRef);
+
     if (!snap.exists()) return;
 
     const data = snap.data();
@@ -64,15 +74,22 @@ async function releaseReservation(id, uid) {
   });
 }
 
+// ==========================================
+// COMPONENT
+// ==========================================
+
 export default function LiveCamera() {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
 
   const ownerRef = useRef(null);
   const openingRef = useRef(false);
+  const requestInProgressRef = useRef(false);
+  const cancelPendingRef = useRef(false);
 
   const [requestId, setRequestId] = useState(null);
   const [mode, setMode] = useState("idle");
+
   const [message, setMessage] = useState(
     "Camera ready to request."
   );
@@ -80,28 +97,34 @@ export default function LiveCamera() {
   const viewing = mode === "viewing";
   const waiting = mode === "requesting";
 
-  // ======================================
-  // REQUEST CAMERA PRIORITY
-  // ======================================
+  // ========================================
+  // REQUEST LIVE CAMERA PRIORITY
+  // ========================================
 
   async function startViewing() {
-    if (ownerRef.current) return;
+    if (
+      ownerRef.current ||
+      requestInProgressRef.current
+    ) {
+      return;
+    }
 
     const user = auth.currentUser;
 
     if (!user) {
       setMessage(
-        "Please log in to view the camera."
+        "Please log in to access the live camera."
       );
       return;
     }
 
+    requestInProgressRef.current = true;
+    cancelPendingRef.current = false;
+
     const id = newRequestId();
 
     setMode("requesting");
-    setMessage(
-      "Requesting camera priority..."
-    );
+    setMessage("Requesting camera priority...");
 
     try {
       await runTransaction(db, async (tx) => {
@@ -109,22 +132,24 @@ export default function LiveCamera() {
 
         if (!snap.exists()) {
           throw new Error(
-            "Camera control document is missing."
+            "Camera control document was not found."
           );
         }
 
         const data = snap.data();
 
         const expired =
-          data.expiresAt?.toMillis?.() <
-          Date.now();
+          typeof data.expiresAt?.toMillis ===
+            "function" &&
+          data.expiresAt.toMillis() <
+            Date.now();
 
         if (
           data.status !== "idle" &&
           !expired
         ) {
           throw new Error(
-            "Camera is reserved by another viewer."
+            "Camera is currently reserved by another viewer."
           );
         }
 
@@ -142,65 +167,90 @@ export default function LiveCamera() {
         uid: user.uid,
       };
 
+      if (cancelPendingRef.current) {
+        const owner = ownerRef.current;
+        ownerRef.current = null;
+
+        await releaseReservation(
+          owner.id,
+          owner.uid
+        );
+
+        return;
+      }
+
       setRequestId(id);
 
       setMessage(
-        "Waiting for Raspberry Pi to release camera..."
+        "Waiting for Raspberry Pi to prepare the camera..."
       );
     } catch (error) {
       setMode("idle");
+
       setMessage(
         error.message || "Camera request failed."
       );
+    } finally {
+      requestInProgressRef.current = false;
     }
   }
 
-  // ======================================
-  // WAIT FOR RASPBERRY PI ACKNOWLEDGMENT
-  // ======================================
+  // ========================================
+  // LISTEN FOR RASPBERRY PI RESPONSE
+  // ========================================
 
   useEffect(() => {
     if (!requestId) return;
 
     const unsubscribe = onSnapshot(
       cameraRef,
-      async (snap) => {
-        // Do not start a stream based only
-        // on stale or uncommitted local data.
+      async (snapshot) => {
         if (
-          snap.metadata.fromCache ||
-          snap.metadata.hasPendingWrites
+          snapshot.metadata.fromCache ||
+          snapshot.metadata.hasPendingWrites
         ) {
           return;
         }
 
-        if (!snap.exists()) {
+        if (!snapshot.exists()) {
           setMessage(
             "Camera control document not found."
           );
           return;
         }
 
-        const data = snap.data();
+        const data = snapshot.data();
 
+        // Ignore acknowledgments belonging
+        // to any other reservation.
         if (data.requestId !== requestId) {
-          ownerRef.current = null;
-          setRequestId(null);
-          setMode("idle");
-          setMessage(
-            "Camera reservation ended."
-          );
+          if (
+            ownerRef.current?.id === requestId
+          ) {
+            ownerRef.current = null;
+            setRequestId(null);
+            setMode("idle");
+            setMessage(
+              "Camera reservation ended."
+            );
+          }
+
           return;
         }
 
+        // Pi has finished the capture and
+        // confirmed that the camera is ready.
         if (data.status === "ready") {
-          if (openingRef.current) return;
+          if (
+            openingRef.current ||
+            ownerRef.current?.id !== requestId
+          ) {
+            return;
+          }
 
           openingRef.current = true;
 
           try {
-            // Confirm ownership and move the
-            // reservation to streaming state.
             await runTransaction(
               db,
               async (tx) => {
@@ -231,12 +281,12 @@ export default function LiveCamera() {
               ownerRef.current?.id === requestId
             ) {
               setMode("viewing");
-              setMessage("LIVE");
+              setMessage("LIVE - Camera connected");
             }
           } catch (error) {
             setMessage(
               error.message ||
-              "Failed to start live session."
+                "Unable to start live viewing."
             );
           } finally {
             openingRef.current = false;
@@ -245,7 +295,7 @@ export default function LiveCamera() {
       },
       (error) => {
         setMessage(
-          `Firestore error: ${error.message}`
+          "Firestore error: " + error.message
         );
       }
     );
@@ -253,17 +303,19 @@ export default function LiveCamera() {
     return () => unsubscribe();
   }, [requestId]);
 
-  // ======================================
-  // RENEW RESERVATION
-  // ======================================
+  // ========================================
+  // AUTOMATIC LEASE RENEWAL
+  // ========================================
 
   useEffect(() => {
     if (!requestId) return;
 
-    const timer = setInterval(async () => {
+    const renew = async () => {
       const owner = ownerRef.current;
 
-      if (owner?.id !== requestId) return;
+      if (owner?.id !== requestId) {
+        return;
+      }
 
       try {
         await runTransaction(
@@ -273,16 +325,18 @@ export default function LiveCamera() {
               cameraRef
             );
 
+            if (!snap.exists()) return;
+
             const data = snap.data();
 
             if (
-              data?.requestId !== requestId ||
-              data?.requestedBy !== owner.uid ||
+              data.requestId !== requestId ||
+              data.requestedBy !== owner.uid ||
               ![
                 "requested",
                 "ready",
                 "streaming",
-              ].includes(data?.status)
+              ].includes(data.status)
             ) {
               return;
             }
@@ -299,17 +353,25 @@ export default function LiveCamera() {
           error
         );
       }
-    }, RENEW_SECONDS * 1000);
+    };
+
+    const timer = setInterval(
+      renew,
+      RENEW_SECONDS * 1000
+    );
 
     return () => clearInterval(timer);
   }, [requestId]);
 
-  // ======================================
-  // CAMERA READY TIMEOUT
-  // ======================================
+  // ========================================
+  // WAITING TIMEOUT
+  // ========================================
 
   useEffect(() => {
-    if (!requestId || mode !== "requesting") {
+    if (
+      !requestId ||
+      mode !== "requesting"
+    ) {
       return;
     }
 
@@ -319,8 +381,10 @@ export default function LiveCamera() {
       if (owner?.id !== requestId) return;
 
       ownerRef.current = null;
+
       setRequestId(null);
       setMode("idle");
+
       setMessage(
         "Camera preparation timed out. Please try again."
       );
@@ -331,24 +395,30 @@ export default function LiveCamera() {
           owner.uid
         );
       } catch (error) {
-        console.error(error);
+        console.error(
+          "Reservation timeout cleanup failed:",
+          error
+        );
       }
     }, READY_TIMEOUT_SECONDS * 1000);
 
     return () => clearTimeout(timer);
   }, [requestId, mode]);
 
-  // ======================================
-  // OPEN HLS STREAM ONLY WHEN READY
-  // ======================================
+  // ========================================
+  // START HLS LIVE STREAM
+  // ========================================
 
   useEffect(() => {
     if (!viewing) return;
 
     const video = videoRef.current;
+
     if (!video) return;
 
     let hls = null;
+
+    setMessage("Connecting to live camera...");
 
     if (Hls.isSupported()) {
       hls = new Hls({
@@ -363,11 +433,18 @@ export default function LiveCamera() {
       hls.on(
         Hls.Events.MANIFEST_PARSED,
         () => {
-          video.play().catch(() => {
-            setMessage(
-              "Press Play to start the video."
-            );
-          });
+          video
+            .play()
+            .then(() => {
+              setMessage(
+                "LIVE - Camera connected"
+              );
+            })
+            .catch(() => {
+              setMessage(
+                "Press Play to start the video."
+              );
+            });
         }
       );
 
@@ -376,7 +453,7 @@ export default function LiveCamera() {
         (_event, data) => {
           if (data.fatal) {
             setMessage(
-              "Live stream error. Try stopping and reopening."
+              "Live stream unavailable. Stop viewing and try again."
             );
           }
         }
@@ -388,19 +465,30 @@ export default function LiveCamera() {
     ) {
       video.src = STREAM_URL;
 
-      video.play().catch(() => {
-        setMessage(
-          "Press Play to start the video."
-        );
-      });
+      video
+        .play()
+        .then(() => {
+          setMessage(
+            "LIVE - Camera connected"
+          );
+        })
+        .catch(() => {
+          setMessage(
+            "Press Play to start the video."
+          );
+        });
     } else {
       setMessage(
-        "Your browser does not support HLS."
+        "Your browser does not support HLS video."
       );
     }
 
+    // Release the video player when viewing ends.
     return () => {
-      hls?.destroy();
+      if (hls) {
+        hls.destroy();
+      }
+
       hlsRef.current = null;
 
       video.pause();
@@ -409,17 +497,21 @@ export default function LiveCamera() {
     };
   }, [viewing]);
 
-  // ======================================
-  // STOP AND RELEASE PRIORITY
-  // ======================================
+  // ========================================
+  // STOP VIEWING AND RELEASE CAMERA
+  // ========================================
 
   async function stopViewing() {
+    cancelPendingRef.current = true;
+
     const owner = ownerRef.current;
 
-    // Immediately unmount the HLS player.
     ownerRef.current = null;
+
+    // Immediately stop the video player.
     setRequestId(null);
     setMode("idle");
+
     setMessage("Live viewing stopped.");
 
     if (!owner) return;
@@ -431,22 +523,27 @@ export default function LiveCamera() {
       );
     } catch (error) {
       console.error(
-        "Failed to release camera:",
+        "Camera release failed:",
         error
       );
 
       setMessage(
-        "Viewer stopped. Reservation will expire automatically."
+        "Viewing stopped. Reservation will expire automatically."
       );
     }
   }
 
-  // Attempt cleanup if component unmounts.
-  // A sudden browser crash is handled by
-  // the lease-expiration mechanism instead.
+  // ========================================
+  // CLEANUP ON COMPONENT UNMOUNT
+  // ========================================
+
   useEffect(() => {
     return () => {
+      cancelPendingRef.current = true;
+
       const owner = ownerRef.current;
+
+      ownerRef.current = null;
 
       if (owner) {
         releaseReservation(
@@ -457,50 +554,126 @@ export default function LiveCamera() {
     };
   }, []);
 
-  // ======================================
-  // INTERFACE
-  // ======================================
+  // ========================================
+  // NEW LIVE CAMERA INTERFACE
+  // ========================================
 
   return (
-    <div
-      style={{
-        width: "100%",
-        maxWidth: "900px",
-        margin: "0 auto",
-      }}
-    >
-      <h2>Butong River Live Camera</h2>
+    <section className="live-camera-card">
 
-      <p>Status: {message}</p>
+      {/* HEADER */}
 
-      {viewing && (
-        <video
-          ref={videoRef}
-          controls
-          autoPlay
-          muted
-          playsInline
-          style={{
-            width: "100%",
-            background: "#000",
-            borderRadius: "10px",
-          }}
-        />
-      )}
+      <div className="live-camera-header">
+        <div className="live-camera-title">
 
-      <div style={{ marginTop: "15px" }}>
-        {mode === "idle" ? (
-          <button onClick={startViewing}>
-            View Live Camera
-          </button>
-        ) : (
-          <button onClick={stopViewing}>
-            {waiting
-              ? "Cancel Camera Request"
-              : "Stop Viewing"}
-          </button>
-        )}
+          <span className="live-camera-icon">
+            📹
+          </span>
+
+          <div>
+            <h2>Butong River Live Camera</h2>
+
+            <p>
+              BRIDGE MONITORING • CAM 01
+            </p>
+          </div>
+        </div>
+
+        <span
+          className={
+            "live-camera-badge " +
+            (viewing
+              ? "live"
+              : waiting
+              ? "waiting"
+              : "")
+          }
+        >
+          {viewing
+            ? "● LIVE"
+            : waiting
+            ? "◷ PREPARING"
+            : "● STANDBY"}
+        </span>
       </div>
-    </div>
+
+      {/* VIDEO PREVIEW */}
+
+      <div className="live-camera-body">
+
+        <div className="live-camera-screen">
+
+          {viewing ? (
+            <video
+              ref={videoRef}
+              controls
+              autoPlay
+              muted
+              playsInline
+            />
+          ) : (
+            <div className="live-camera-placeholder">
+
+              <span className="live-camera-placeholder-icon">
+                {waiting ? "⏳" : "📷"}
+              </span>
+
+              <h3>
+                {waiting
+                  ? "Preparing Live Camera"
+                  : "Camera Preview Offline"}
+              </h3>
+
+              <p>
+                {waiting
+                  ? "Waiting for Raspberry Pi to release the camera..."
+                  : "Click View Live Camera to monitor the river."}
+              </p>
+
+            </div>
+          )}
+
+        </div>
+
+        {/* STATUS AND CONTROLS */}
+
+        <div className="live-camera-footer">
+
+          <p
+            className="live-camera-status"
+            role="status"
+            aria-live="polite"
+          >
+            {message}
+          </p>
+
+          {mode === "idle" ? (
+            <button
+              type="button"
+              className="live-camera-button"
+              onClick={startViewing}
+            >
+              ▶ View Live Camera
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="live-camera-button stop"
+              onClick={stopViewing}
+            >
+              {waiting
+                ? "Cancel Camera Request"
+                : "■ Stop Viewing"}
+            </button>
+          )}
+
+          <p className="live-camera-note">
+            Secure Live Monitoring •
+            Butong Bridge, Cabuyao
+          </p>
+
+        </div>
+      </div>
+    </section>
   );
 }
