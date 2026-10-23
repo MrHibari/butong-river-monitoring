@@ -1,7 +1,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-
 // Replace after configuring secure remote access.
 // Example: https://your-pi.your-tailnet.ts.net/cam/index.m3u8
 const STREAM_URL = "https://rpi-thesis.taila44a15.ts.net/cam/index.m3u8";
