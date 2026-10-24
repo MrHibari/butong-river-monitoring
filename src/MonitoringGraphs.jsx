@@ -105,21 +105,17 @@ export default function MonitoringGraphs() {
             <LineChart data={readings}>
               <CartesianGrid strokeDasharray="3 3" />
 
+              <XAxis
+                dataKey="label"
+                minTickGap={35}
+              />
+
               <YAxis
                 unit=" cm"
                 width={75}
                 domain={[0, 40]}
                 ticks={[0, 10, 20, 30, 40]}
                 allowDataOverflow={true}
-              />
-
-              <YAxis
-                unit=" cm"
-                width={75}
-                domain={[
-                  0,
-                  (dataMax) => Math.max(150, dataMax)
-                ]}
               />
 
               <Tooltip />
