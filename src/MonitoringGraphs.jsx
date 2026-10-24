@@ -55,7 +55,7 @@ export default function MonitoringGraphs() {
               }),
               waterLevel:
                 typeof reading.water_level_m === "number"
-                  ? reading.water_level_m
+                  ? reading.water_level_m * 100
                   : null,
               isTest: reading.is_test === true
             };
@@ -111,11 +111,11 @@ export default function MonitoringGraphs() {
               />
 
               <YAxis
-                unit=" m"
-                width={65}
+                unit=" cm"
+                width={75}
                 domain={[
                   0,
-                  (dataMax) => Math.max(1.5, dataMax)
+                  (dataMax) => Math.max(150, dataMax)
                 ]}
               />
 
@@ -123,14 +123,14 @@ export default function MonitoringGraphs() {
               <Legend />
 
               <ReferenceLine
-                y={0.8}
+                y={15}
                 stroke="#d5a126"
                 strokeDasharray="5 5"
                 label="Elevated"
               />
 
               <ReferenceLine
-                y={1.2}
+                y={20}
                 stroke="#dc4444"
                 strokeDasharray="5 5"
                 label="Critical"
@@ -139,7 +139,7 @@ export default function MonitoringGraphs() {
               <Line
                 type="monotone"
                 dataKey="waterLevel"
-                name="Water Level (m)"
+                name="Water Level (cm)"
                 stroke="#1769aa"
                 strokeWidth={3}
                 dot

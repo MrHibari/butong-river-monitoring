@@ -112,9 +112,9 @@ function StatusCards({ data }) {
   let alert = "unknown";
 
   if (validLevel && health.status === "recent") {
-    if (level >= 1.2) {
+    if (level >= 0.20) {
       alert = "critical";
-    } else if (level >= 0.8) {
+    } else if (level >= 0.15) {
       alert = "elevated";
     } else {
       alert = "normal";
@@ -154,7 +154,7 @@ function StatusCards({ data }) {
         </div>
 
         <strong className="metric-value">
-          {validLevel ? `${level.toFixed(2)} m` : "N/A"}
+          {validLevel ? `${(level * 100).toFixed(2)} cm` : "N/A"}
         </strong>
 
         <p className="metric-description">
