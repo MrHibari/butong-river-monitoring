@@ -57,10 +57,6 @@ export default function MonitoringGraphs() {
                 typeof reading.water_level_m === "number"
                   ? reading.water_level_m
                   : null,
-              flowSpeed:
-                typeof reading.flow_speed_mps === "number"
-                  ? reading.flow_speed_mps
-                  : null,
               isTest: reading.is_test === true
             };
           })
@@ -100,6 +96,7 @@ export default function MonitoringGraphs() {
           TEST DATA — Includes simulated measurements
         </p>
       )}
+
       <div className="graphs-grid">
         <div className="graph-card">
           <h3>Water Level History</h3>
@@ -107,12 +104,21 @@ export default function MonitoringGraphs() {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={readings}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" minTickGap={35} />
+
+              <XAxis
+                dataKey="label"
+                minTickGap={35}
+              />
+
               <YAxis
                 unit=" m"
                 width={65}
-                domain={[0, (dataMax) => Math.max(1.5, dataMax)]}
+                domain={[
+                  0,
+                  (dataMax) => Math.max(1.5, dataMax)
+                ]}
               />
+
               <Tooltip />
               <Legend />
 
@@ -135,35 +141,6 @@ export default function MonitoringGraphs() {
                 dataKey="waterLevel"
                 name="Water Level (m)"
                 stroke="#1769aa"
-                strokeWidth={3}
-                dot
-                connectNulls={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="graph-card">
-          <h3>Water Flow Speed History</h3>
-
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={readings}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" minTickGap={35} />
-              <YAxis
-                unit=" m/s"
-                width={70}
-                domain={[0, (dataMax) => Math.max(0.5, dataMax)]}
-                allowDecimals={true}
-              />
-              <Tooltip />
-              <Legend />
-
-              <Line
-                type="monotone"
-                dataKey="flowSpeed"
-                name="Flow Speed (m/s)"
-                stroke="#138577"
                 strokeWidth={3}
                 dot
                 connectNulls={false}
